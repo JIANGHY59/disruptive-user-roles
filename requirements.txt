@@ -1,0 +1,9 @@
+requests
+python-dotenv
+pandas
+networkx
+scikit-learn
+torch
+transformers
+tqdm
+streamlit
