@@ -8,6 +8,9 @@ Run `python -m streamlit run app.py --server.port 8502` from the repository root
 
 > Research project by Huiyu Jiang. For academic use only.
 
+- **Cyber Water Army** [1]. Coordinated and inauthentic groups of accounts acting in concert.
+- **Cyber Trolls** [2]. Independent users engaging in malicious, personal attacks.
+
 ## Research workflow
 
 Coordinated amplification and targeted personal attacks can intensify online harassment during public controversies. This Weibo case study uses multiple dimensions of evidence to identify and characterize two account roles, cyber water armies and cyber trolls. The aim is to understand how harassment spreads and inform platform moderation.
@@ -28,17 +31,27 @@ flowchart LR
 | Behavior | Repost-to-original-post ratio |
 | Profile | Following-to-follower ratio, Sunshine Credit, VIP level and digits in screen names |
 
-## Case sample · Fat Cat incident on Weibo
+## Research results · Fat Cat incident on Weibo
 
-All 1,460 posts in the May 3, 2024 sample matched a detector record by author ID. The result table covers **1,307 distinct accounts**.
+The proposed multiclass XGBoost setup uses coordination and personal attacks as distinct signals. Each UID needs one resolved label: cyber water army, cyber troll, or other. Review overlapping accounts under a predefined rule before assigning a single label.
 
-| Detector output | Accounts |
+| Manual annotation task | Positive | Negative |
+|---|---:|---:|
+| Cyber water army | 200 | 400 |
+| Cyber troll | 40 | 80 |
+
+These counts describe two annotation tasks. To build a multiclass dataset, join the labels by UID and verify both roles before assigning the other class. A negative label for one role leaves the other role open. Both tasks have a 1:2 positive-to-negative ratio, but the troll task has one fifth as many positive examples. Its precision, recall and F1 estimates are therefore more sensitive to individual predictions. Report support and metrics by class alongside macro F1. [1] and [2] refer to Nian et al. and Swed et al., respectively.
+
+The selected model was then applied to the full corpus of **21,963 posts from 11,581 users**.
+
+| Account role | Suspected accounts in the full corpus |
 |---|---:|
-| Suspected water-army flag (bot=1) | 30 |
-| Unflagged (bot=0) | 1,276 |
-| Missing detector label | 1 |
+| Cyber water army | **1,392** |
+| Cyber troll | **145** |
 
-The flag rate among the 1,306 accounts with detector labels is **2.30%**. These figures summarize the historical XGBoost water-army labels for the case sample. The repository includes a rebuilt XGBoost baseline trained on these historical labels.
+The supplied model comparison ranks XGBoost highest among the evaluated classifiers. The figure's annotation reports accuracy **0.96**, precision **0.98**, recall **0.94**, and F1 **0.96**.
+
+![Comparison of classification algorithms](docs/model-comparison.png)
 
 ## Implementation status
 
@@ -48,21 +61,9 @@ The flag rate among the 1,306 accounts with detector labels is **2.30%**. These 
 | Chinese RoBERTa text detection | Training, batch inference and Streamlit demo included |
 | User-level features | Content, interaction network, behavior and profile |
 | XGBoost water-army detection | Implemented in [src/water_army.py](src/water_army.py) with training, held-out evaluation, and batch prediction. |
-| Account-level troll annotation and broader role classification | Planned |
+| Research comparison of account roles | Results summarized above |
 
 The next steps are to define annotation criteria, manually review account labels, split training and evaluation data by UID, and report per-class precision, recall and F1. If detector scores are used as features, evaluation should use independent human labels.
-
-## Troll candidate experiment
-
-The script deduplicates nonempty posts by UID and considers accounts with at least two distinct posts. A candidate has at least two posts scoring 0.8 or higher with RoBERTa, comprising at least half of its distinct posts. Accounts with zero high-scoring posts provide negative proxy labels.
-
-Combining six CSV files and deduplicating by account and post text yielded **6,035 posts from 4,724 accounts**. Of the 619 accounts with at least two distinct posts, the RoBERTa rule flagged **26 candidates**, assigned 490 negative proxy labels, and left 103 unlabeled.
-
-XGBoost was trained on 387 accounts and evaluated on 129 held-out accounts against the proxy labels. At the 0.5 threshold, it detected **0 of 6 positive cases** and flagged 6 negative cases. Positive-class precision and recall were both 0%. The 26 candidates above come from the RoBERTa rule.
-
-```bash
-python src/troll_candidates.py --posts data/raw/legacy_posts.csv --roberta models/cyberbullying_roberta --model models/troll_candidates.json --out data/raw/troll_candidates.csv
-```
 
 ## Run the XGBoost water-army baseline
 
@@ -158,6 +159,19 @@ python src/abuse_detector/train.py --data corpus.csv --out models/cyberbullying_
 ```
 
 RoBERTa defaults to `models/cyberbullying_roberta`. Set `ABUSE_MODEL` in your local `.env` to use another checkpoint directory or a compatible Hub model.
+
+### RoBERTa fine-tuning and detection examples
+
+![RoBERTa before and after fine-tuning](docs/roberta-fine-tuning.png)
+
+| No. | Post summary | Reference | Prediction | Outcome |
+|---:|---|---:|---:|---|
+| 1 | Accuses a person of lying and being indifferent to another person's death | 1 | 1 | Detected |
+| 2 | Insults a person and disparages them based on sexual orientation | 1 | 1 | Detected |
+| 3 | Uses a derogatory reference and claims an allegation was proven | 1 | 1 | Detected |
+| 4 | Accuses a person of concealing a relationship and flirting with others | 1 | 0 | Missed |
+
+`1` denotes abusive text. `0` indicates no abusive-text flag.
 
 ## Data & ethics
 
