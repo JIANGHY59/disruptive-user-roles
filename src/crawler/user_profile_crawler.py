@@ -23,6 +23,7 @@ import random
 import re
 import sys
 import time
+from html import unescape
 from pathlib import Path
 
 import pandas as pd
@@ -53,10 +54,14 @@ class RateLimited(Exception):
     pass
 
 
+class WeiboAccessError(ValueError):
+    pass
+
+
 def make_session() -> requests.Session:
     cookie = os.getenv("WEIBO_COOKIE")
     if not cookie:
-        raise SystemExit("请先在 .env 中设置 WEIBO_COOKIE（参考 .env.example）")
+        raise WeiboAccessError("请先在本地 .env 中设置 WEIBO_COOKIE。")
     s = requests.Session()
     # 原代码用 cookies={"cookie": ...} 会把整串当成名为 "cookie" 的单个cookie，应放进 header
     s.headers.update({"cookie": cookie, "user-agent": UA, "referer": "https://weibo.com/"})
@@ -64,11 +69,57 @@ def make_session() -> requests.Session:
 
 
 def fetch_json(s: requests.Session, url: str) -> dict:
-    resp = s.get(url, timeout=15)
-    if resp.status_code in (403, 418, 429):
+    resp = s.get(url, timeout=15, allow_redirects=False)
+    if resp.status_code in (418, 429):
         raise RateLimited(f"HTTP {resp.status_code}")
+    if resp.status_code == 403:
+        raise WeiboAccessError("微博拒绝访问（HTTP 403），请检查账号权限或是否需要验证。")
+    if resp.status_code == 401 or 300 <= resp.status_code < 400:
+        raise WeiboAccessError(f"微博返回 HTTP {resp.status_code}，可能需要重新登录或验证。")
     resp.raise_for_status()
-    return resp.json()
+    try:
+        payload = resp.json()
+    except ValueError as exc:
+        raise WeiboAccessError("微博返回了非 JSON 页面，可能需要登录或验证。") from exc
+    if not isinstance(payload, dict):
+        raise WeiboAccessError("微博返回的 JSON 结构有变化。")
+    if payload.get("ok") in (0, "0"):
+        raise WeiboAccessError("微博拒绝了请求，或该账号的数据不可用。")
+    return payload
+
+
+def scoring_posts(s: requests.Session, uid: str) -> list[dict]:
+    """Fetch one authorized timeline page and map it to the training CSV schema."""
+    if not re.fullmatch(r"[0-9]{1,20}", uid):
+        raise ValueError("请输入纯数字微博 UID。")
+    profile = fetch_json(s, INFO_URL.format(uid=uid)).get("data")
+    user = profile.get("user") if isinstance(profile, dict) else None
+    if not isinstance(user, dict) or str(user.get("id", "")) != uid:
+        raise WeiboAccessError("微博未返回账号资料。")
+    time.sleep(1)
+    data = fetch_json(s, TIMELINE_URL.format(uid=uid, page=1)).get("data")
+    if not isinstance(data, dict) or not isinstance(data.get("list"), list):
+        raise WeiboAccessError("微博未返回预期的博文列表，接口响应可能有变化。")
+    timeline = [
+        post for post in data["list"]
+        if isinstance(post, dict) and isinstance(post.get("user"), dict)
+        and str(post["user"].get("id", "")) == uid
+    ]
+    if not timeline:
+        raise WeiboAccessError("没有采集到该账号可评分的博文。")
+    return [{
+        "楼主ID": uid,
+        "话题内容": post.get("text_raw") or unescape(re.sub(r"<[^>]+>", "", post.get("text") or "")),
+        "楼主昵称": user.get("screen_name"),
+        "阳光信用": None,
+        "发博数量": user.get("statuses_count"),
+        "关注人数": user.get("friends_count"),
+        "粉丝数": user.get("followers_count"),
+        "微博等级": user.get("urank"),
+        "转发量": post.get("reposts_count"),
+        "评论量": post.get("comments_count"),
+        "点赞量": post.get("attitudes_count"),
+    } for post in timeline]
 
 
 def name_digit_ratio(name: str) -> float:
@@ -121,11 +172,23 @@ def get_profile(s: requests.Session, uid, timeline_pages: int) -> dict | None:
 
 def main() -> None:
     p = argparse.ArgumentParser(description="Weibo user profile crawler (academic use only)")
-    p.add_argument("--in", dest="inp", required=True, help="含 user_id 列的 CSV")
+    mode = p.add_mutually_exclusive_group(required=True)
+    mode.add_argument("--in", dest="inp", help="含 user_id 列的 CSV")
+    mode.add_argument("--check-uid", help="检查一个微博 UID 的资料与一页博文是否可读取")
     p.add_argument("--out", default="data/raw/profiles.csv")
     p.add_argument("--timeline-pages", type=int, default=2, help="抽样多少页历史微博，0=不抓")
     p.add_argument("--anonymize", action="store_true", help="哈希ID，丢弃昵称与简介（数字占比已先算好）")
     args = p.parse_args()
+    if args.check_uid is not None:
+        try:
+            with make_session() as session:
+                rows = scoring_posts(session, args.check_uid)
+        except (RateLimited, WeiboAccessError, ValueError) as exc:
+            p.exit(1, f"采集检查失败：{exc}\n")
+        except requests.RequestException:
+            p.exit(1, "采集检查失败：微博请求异常，请检查网络连接。\n")
+        print(f"采集检查通过：账号资料可读取，取得 {len(rows)} 条可评分博文。")
+        return
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
     uids = pd.read_csv(args.inp, encoding="utf-8-sig")["user_id"].dropna().astype(str).unique().tolist()
@@ -137,7 +200,10 @@ def main() -> None:
     if out.exists():
         done = set(pd.read_csv(out, encoding="utf-8-sig")["user_id"].astype(str))
     new_file = not out.exists()
-    s = make_session()
+    try:
+        s = make_session()
+    except WeiboAccessError as exc:
+        p.error(str(exc))
 
     with open(out, "a", newline="", encoding="utf-8-sig") as f:
         writer = csv.DictWriter(f, fieldnames=FIELDS)
