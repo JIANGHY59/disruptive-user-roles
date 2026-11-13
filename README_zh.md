@@ -1,69 +1,85 @@
 # 社交媒体破坏性用户角色的识别与刻画
 
-一个多维度框架，用于在微博上识别并区分两类破坏性用户：**网络水军**（协同行动的非真实账号群体）和**网络喷子**（独立发起恶意人身攻击的用户）。
+**微博用户角色研究原型** · 数据采集、中文攻击性文本检测与账号特征提取
 
-[English](README.md) | **简体中文**
+[English](README.md) | **简体中文** | [日本語](README_ja.md)
+
+在仓库根目录运行 `python -m streamlit run app.py --server.port 8502`，然后打开 [本地 Streamlit 演示](http://127.0.0.1:8502/)。
 
 > 作者：Huiyu Jiang。仅用于学术研究。
 
-## 项目简介
+## 研究概览
 
-破坏性用户会损害网络讨论和社区健康。水军负责放大和协同，喷子负责攻击个人。两者常被混为一谈，但行为痕迹并不相同。本项目构建了一条流程：从四个维度提取特征，并据此区分这两类角色。
+本项目研究微博上的两类破坏性用户角色：可能参与协同放大的网络水军，以及发表针对个人攻击内容的网络喷子。仓库提供微博采集、文本检测和用户特征工程代码。现有案例包含使用 XGBoost 生成的疑似水军检测结果。仓库已提供基于这些历史标签重建的 XGBoost 水军检测基线。喷子账号标注和多角色分类仍待完成。
 
 ```mermaid
 flowchart LR
-    A[爬虫<br/>博文与用户主页] --> B[预处理<br/>清洗、匿名化]
-    B --> C[辱骂检测<br/>微调的中文 RoBERTa]
-    B --> D[特征工程<br/>内容 / 网络 / 行为 / 画像]
+    A[博文与用户主页] --> B[清洗与预处理]
+    B --> C[RoBERTa 文本检测]
+    B --> D[用户特征矩阵]
     C --> D
-    D --> E[角色识别<br/>XGBoost 分类器]
-    E --> F[角色特征<br/>定量分析]
+    G[旧版博文 CSV 或微博账号采样] --> E[XGBoost 水军检测] --> F[账号评分]
 ```
 
-### 特征维度
-
-| 维度 | 特征 |
+| 特征维度 | 示例 |
 |---|---|
-| 内容 | 辱骂内容占比、内容相似度、@/链接占比 |
-| 网络结构 | 度中心性（及其百分位排名） |
-| 行为 | 转发/原创比 |
-| 用户画像 | 关注/粉丝比、阳光信用、VIP 等级、用户名数字占比 |
+| 内容 | 攻击性文本占比、文本相似度、@ 与链接占比 |
+| 网络结构 | 互动网络的度中心性 |
+| 行为 | 转发与原创的比率 |
+| 用户画像 | 关注与粉丝的比率、阳光信用、VIP 等级、昵称中的数字占比 |
 
-## 案例研究与发现
+## 案例样本 · 微博「胖猫事件」
 
-框架应用于微博上的一起重大舆情事件：**11,581 名用户的 21,963 条博文**。共识别出 **1,392 个疑似水军账号**和 **145 个疑似喷子账号**。在标注数据上，表现最好的分类器 XGBoost 达到准确率 0.96、精确率 0.98、召回率 0.94、F1 0.96，优于朴素贝叶斯、SVM、随机森林、KNN 等其他对比算法。
+2024 年 5 月 3 日样本中，1,460 条博文的楼主 ID 均能匹配检测表的 UID。检测表按 UID 去重后覆盖 **1,307 个账号**。
 
-两类角色呈现出不同的特征（阈值来自这一个案例，属于描述性结果，不是通用规则）：
+| 检测输出 | 账号数 |
+|---|---:|
+| 疑似水军（`bot=1`） | 30 |
+| 未被标记（`bot=0`） | 1,276 |
+| 缺少检测标签 | 1 |
 
-| 特征 | 网络水军 | 网络喷子 |
-|---|---|---|
-| 内容 | @/链接占比 ≥ 1/3；内容相似度 ≥ 1/3 | 辱骂内容占比 ≥ 1/2 |
-| 度中心性排名 | 10%–50% | 50%–100% |
-| 转发/原创比 | > 3 | ≥ 2 |
-| 关注/粉丝比 | ≥ 10 | ≥ 2 |
-| 阳光信用 | ≤ 2 | < 4 |
-| VIP 等级 | 0 | – |
-| 用户名数字占比 | ≥ 1/2 | < 1/2 |
+在 1,306 个有标签的账号中，疑似标记占 **2.30%**。这里统计的是 XGBoost 水军检测器的输出，准确性有待人工复核。文本攻击性是博文层面的信号，账号角色需要结合跨博文证据和独立标注。
 
-这里用"疑似"是有意的：这些是基于行为模式的统计标签，并不能证明某个账号一定是有组织或恶意的。
-
-## 仓库内容
+## 实现进度
 
 | 组件 | 状态 |
 |---|---|
-| 博文爬虫（`src/crawler/weibo_crawler.py`） | 已包含 |
-| 用户主页爬虫（`src/crawler/user_profile_crawler.py`） | 已包含 |
-| 辱骂检测：训练、批量推理、Streamlit demo | 已包含 |
-| 特征工程（`src/features.py`） | 已包含 |
-| 角色分类器（XGBoost 训练与评估）及角色特征分析 | **暂未包含**，上文结果来自研究本身 |
-| 原始数据、标注账号、训练语料、模型权重 | **不包含**（见"数据与伦理"） |
+| 博文与用户主页采集 | 仓库提供代码 |
+| 中文 RoBERTa 文本检测 | 仓库提供训练、批量推理与 Streamlit 演示 |
+| 用户特征工程 | 仓库提供代码 |
+| XGBoost 水军检测 | 已实现，见 [src/water_army.py](src/water_army.py)，支持训练、留出集评估和批量预测。 |
+| 喷子账号标注与多角色分类 | 待完成 |
 
-爬虫和 `features.py` 是为公开发布重构的，目前只在模拟数据上测试过。微博网页接口没有官方文档且会变化，大规模运行前请先用单个用户或一页数据验证。
+后续拟制定账号级标注规范，人工复核样本，按 UID 划分训练与测试数据，并按类别报告精确率、召回率与 F1。若将水军检测分数用作特征，评估应使用独立的人工标签。
+
+## 运行 XGBoost 水军检测基线
+
+将两份原始 CSV 保存在本地，例如 `data/raw/legacy_posts.csv`（含「楼主ID」「话题内容」等原始中文列）和 `data/raw/labels.csv`（含 `uid`、`bot`）。从仓库根目录运行：
+
+```bash
+pip install "xgboost>=2" pandas scikit-learn networkx
+python src/water_army.py train --posts data/raw/legacy_posts.csv --labels data/raw/labels.csv --model models/water_army.json
+python src/water_army.py predict --posts data/raw/legacy_posts.csv --model models/water_army.json --out data/raw/water_army_predictions.csv
+```
+
+脚本按 UID 汇总用户画像、文本和互动量，每个账号只进入训练集或测试集之一。训练忽略空白标签，发现冲突标签时报错。训练输出模型和 `water_army.metrics.json`，预测输出每个账号的 `uid,bot,bot_score`，可用 `--threshold` 设置分数阈值，默认 0.5。
+
+历史 `bot` 用作训练和评估的参考标签，`bot_score` 不参与训练。留出集指标衡量新模型与历史标签的一致程度，真实检测效果需要人工复核。对训练来源的整份博文表执行预测可检查导出流程，评估请看留出集报告。
+
+在仓库根目录运行 `py -m streamlit run app.py`。在「XGBoost 水军风险」输入数字 UID，并上传旧版博文 CSV，或在本地 `.env` 配置 `WEIBO_COOKIE` 后请求该账号的一页微博。登录、验证或限流会停止采集，可以切换到 CSV。页面默认读取 `models/water_army.json`，也可以通过 `WATER_ARMY_MODEL` 指定。实时采样与训练时的事件窗口不同，分数供人工复核。
+
+配置自己的微博会话后，可以先运行以下命令检查账号资料与一页博文能否读取。将示例数字换成目标 UID。
+
+```bash
+python src/crawler/user_profile_crawler.py --check-uid 1234567890
+```
+
+旧版博文 CSV 使用原始中文列名。下文话题爬虫生成的 CSV 使用另一套列名。
 
 ## 目录结构
 
 ```
-├── app.py                      # Streamlit demo：单句辱骂检测
+├── app.py                      # Streamlit：账号评分与文本检测
 ├── requirements.txt
 ├── .env.example                # 复制为 .env，填入你自己的 Cookie
 ├── data/README.md              # 训练语料的获取方式
@@ -71,6 +87,7 @@ flowchart LR
     ├── preprocess.py           # 训练与推理共用的文本清洗
     ├── utils.py                # 用户ID哈希（匿名化）
     ├── features.py             # 生成用户特征矩阵
+    ├── water_army.py           # XGBoost
     ├── crawler/
     │   ├── weibo_crawler.py
     │   └── user_profile_crawler.py
@@ -91,15 +108,15 @@ cp .env.example .env            # 填入 WEIBO_COOKIE（你自己的账号）和
 
 ```bash
 python src/crawler/weibo_crawler.py --keyword "<话题>" \
-    --start "2024-05-03 19:00" --end "2024-05-03 20:00" --max-pages 20 --out data/raw/posts.csv
-python src/crawler/user_profile_crawler.py --in data/raw/posts.csv --out data/raw/profiles.csv
+    --start "2024-05-03 19:00" --end "2024-05-03 20:00" --max-pages 20 --out data/raw/topic_posts.csv
+python src/crawler/user_profile_crawler.py --in data/raw/topic_posts.csv --out data/raw/profiles.csv
 ```
 
 **2. 用辱骂检测器给博文打标签**
 
 ```bash
-python src/abuse_detector/predict_csv.py --model <本地路径或Hub模型名> \
-    --in data/raw/posts.csv --out data/raw/posts_scored.csv
+python src/abuse_detector/predict_csv.py --model "models/cyberbullying_roberta" \
+    --in data/raw/topic_posts.csv --out data/raw/posts_scored.csv
 ```
 
 **3. 生成特征矩阵**
@@ -112,7 +129,7 @@ python src/features.py --posts data/raw/posts_scored.csv \
 **4.（可选）运行 demo**
 
 ```bash
-ABUSE_MODEL=<本地路径或Hub模型名> streamlit run app.py
+python -m streamlit run app.py
 ```
 
 注意：互动网络由 @ 关系构建，而 @ 只含昵称，所以第 3 步需要**未匿名化**的数据（爬取时不加 `--anonymize`）。请在本地运行，只公开匿名化、聚合后的结果。
@@ -122,13 +139,13 @@ ABUSE_MODEL=<本地路径或Hub模型名> streamlit run app.py
 - **基座模型：** `hfl/chinese-roberta-wwm-ext-large`，微调为二分类（辱骂 / 非辱骂）。
 - **语料：** 三个公开数据集的合并：ToxiCN [1]、COLD [2]、SWSR [3]。本仓库不提供再分发，获取方式见 `data/README.md`。
 - **训练设置：** AdamW，学习率 5e-5，权重衰减 0.01，100 步 warmup，5 个 epoch，batch size 32，最大长度 128；按 8:1:1 分层划分训练/验证/测试集。保留验证集 F1 最高的一轮，测试集只在最后使用一次。
-- **指标：** 运行 `train.py` 后，模型目录下会生成 `training_log.json` 和 `test_metrics.json`。*（请在此填入最终的测试集结果。）*
+- **指标：** 运行 `train.py` 后，模型目录下会生成 `training_log.json` 和 `test_metrics.json`。
 
 ```bash
 python src/abuse_detector/train.py --data corpus.csv --out models/cyberbullying_roberta
 ```
 
-模型权重托管在 Hugging Face Hub *（补充链接）*，不在本仓库中。
+RoBERTa 默认读取 `models/cyberbullying_roberta`。可在本地 `.env` 用 `ABUSE_MODEL` 指定其他权重目录或兼容的 Hub 模型。
 
 ## 数据与伦理
 
@@ -143,7 +160,7 @@ python src/abuse_detector/train.py --data corpus.csv --out models/cyberbullying_
 - 只研究了一个平台上的一起事件，特征和阈值未必能迁移到其他场景。
 - 辱骂检测器继承了三个语料的偏差和标注取舍，可能误判反讽、引用和被挪用的脏话。
 - 转发/原创比是基于每个用户最近一部分微博的抽样估计。
-- 角色标签反映的是与标注样本的行为相似性，并非真实意图。
+- 现有检测标签只能用于描述该检测器在这批样本上的输出。
 
 ## 参考文献
 

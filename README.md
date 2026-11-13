@@ -1,69 +1,76 @@
 # Identifying and Characterizing Disruptive User Roles on Social Media
 
-A multi-dimensional framework for identifying and distinguishing two kinds of disruptive users on Weibo: the **Cyber Water Army** (coordinated, inauthentic accounts acting in concert) and **Cyber Trolls** (independent users engaging in malicious personal attacks).
+**Weibo research prototype** · Data collection, Chinese abusive-text detection and account-level feature extraction.
 
-**English** | [简体中文](README_zh.md)
+**English** | [简体中文](README_zh.md) | [日本語](README_ja.md)
+
+Run `python -m streamlit run app.py --server.port 8502` from the repository root, then open the [local Streamlit demo](http://127.0.0.1:8502/).
 
 > Research project by Huiyu Jiang. For academic use only.
 
-## Overview
-
-Disruptive users harm online discourse and community health. Water-army accounts amplify and coordinate; trolls attack individuals. They are often lumped together, but they leave different behavioral traces. This project builds a pipeline that extracts features from four dimensions and uses them to tell the two roles apart.
+## Research workflow
 
 ```mermaid
 flowchart LR
-    A[Crawlers<br/>posts & profiles] --> B[Preprocessing<br/>cleaning, anonymization]
-    B --> C[Abuse detector<br/>fine-tuned Chinese RoBERTa]
-    B --> D[Feature engineering<br/>content / network / behavior / profile]
+    A[Posts and profiles] --> B[Preprocessing]
+    B --> C[RoBERTa text detection]
+    B --> D[User feature matrix]
     C --> D
-    D --> E[Role identification<br/>XGBoost classifier]
-    E --> F[Role characteristics<br/>quantitative analysis]
+    G[Legacy posts CSV or live account sample] --> E[XGBoost water-army detection] --> F[Account scores]
 ```
 
-### Feature dimensions
+## Case sample · Fat Cat incident on Weibo
 
-| Dimension | Features |
-|---|---|
-| Content | abusive content ratio, content similarity, @/link ratio |
-| Network structure | degree centrality (and its percentile rank) |
-| Behavior | repost-to-original post ratio |
-| Profile | following/follower ratio, Sunshine Credit, VIP level, username digit ratio |
+All 1,460 posts in the May 3, 2024 sample matched a detector record by author ID. The result table covers **1,307 distinct accounts**.
 
-## Case study and findings
+| Detector output | Accounts |
+|---|---:|
+| Suspected water-army flag (bot=1) | 30 |
+| Unflagged (bot=0) | 1,276 |
+| Missing detector label | 1 |
 
-The framework was applied to one major public-opinion event on Weibo: **21,963 posts from 11,581 users**. It flagged **1,392 suspected water-army accounts** and **145 suspected troll accounts**. On the labeled data, the best classifier (XGBoost) reached accuracy 0.96, precision 0.98, recall 0.94 and F1 0.96, ahead of Naive Bayes, SVM, Random Forest, KNN and the other baselines compared.
+The flag rate among the 1,306 accounts with detector labels is **2.30%**. These outputs came from an XGBoost water-army detector and await manual review. The repository includes a rebuilt XGBoost baseline trained on these historical labels.
 
-The two roles showed different signatures (thresholds as observed in this one case study; they are descriptive, not universal rules):
-
-| Feature | Cyber Water Army | Cyber Troll |
-|---|---|---|
-| Content | @/link ratio ≥ 1/3; content similarity ≥ 1/3 | abusive content ratio ≥ 1/2 |
-| Degree centrality rank | 10%–50% | 50%–100% |
-| Repost/original ratio | > 3 | ≥ 2 |
-| Following/follower ratio | ≥ 10 | ≥ 2 |
-| Sunshine Credit | ≤ 2 | < 4 |
-| VIP level | 0 | – |
-| Username digit ratio | ≥ 1/2 | < 1/2 |
-
-"Suspected" is deliberate: these are statistical labels from behavioral patterns, not proof that any individual account is a paid or malicious actor.
-
-## What is in this repository
+## Implementation status
 
 | Component | Status |
 |---|---|
-| Post crawler (`src/crawler/weibo_crawler.py`) | Included |
-| User profile crawler (`src/crawler/user_profile_crawler.py`) | Included |
-| Abuse detector: training, batch inference, Streamlit demo | Included |
-| Feature engineering (`src/features.py`) | Included |
-| Role classifier (XGBoost training/evaluation) and role-characteristics analysis | **Not included yet.** Results above are from the study. |
-| Raw data, labeled accounts, training corpus, model weights | **Not included** (see Data & ethics) |
+| Post and profile collection | Code included |
+| Chinese RoBERTa text detection | Training, batch inference and Streamlit demo included |
+| User-level features | Content, interaction network, behavior and profile |
+| XGBoost water-army detection | Implemented in [src/water_army.py](src/water_army.py) with training, held-out evaluation, and batch prediction. |
+| Account-level troll annotation and broader role classification | Planned |
 
-The crawlers and `features.py` were refactored for publication and have been tested on synthetic data only. Weibo's web endpoints are undocumented and change; verify against a single user or one page before a larger run.
+The next steps are to define annotation criteria, manually review account labels, split training and evaluation data by UID, and report per-class precision, recall and F1. If detector scores are used as features, evaluation should use independent human labels.
+
+## Run the XGBoost water-army baseline
+
+Keep both input files locally, for example as `data/raw/legacy_posts.csv` (the legacy Weibo export with Chinese column names) and `data/raw/labels.csv` (with `uid` and `bot`). Run from the repository root:
+
+```bash
+pip install "xgboost>=2" pandas scikit-learn networkx
+python src/water_army.py train --posts data/raw/legacy_posts.csv --labels data/raw/labels.csv --model models/water_army.json
+python src/water_army.py predict --posts data/raw/legacy_posts.csv --model models/water_army.json --out data/raw/water_army_predictions.csv
+```
+
+Training aggregates posts by UID, excludes blank labels, rejects conflicting labels, and writes a model and `water_army.metrics.json`. Prediction writes `uid,bot,bot_score` per account. Set `--threshold` to change the default cutoff of 0.5.
+
+The baseline uses historical `bot` values as reference labels and excludes `bot_score` from the features. Held-out metrics measure agreement with historical labels. Estimating real-world detection accuracy requires independently reviewed labels.
+
+Run `python -m streamlit run app.py` and enter a numeric Weibo UID in the account scoring form. Upload a legacy posts CSV for offline scoring, or configure `WEIBO_COOKIE` in the local `.env` to request one timeline page. The crawler stops when Weibo requires login or verification or limits access. The app loads `models/water_army.json` by default, with `WATER_ARMY_MODEL` as an override. Live timeline samples differ from the historical training window.
+
+After configuring your own Weibo session, check that the crawler can read the account profile and one page of posts. Replace the example UID with your target.
+
+```bash
+python src/crawler/user_profile_crawler.py --check-uid 1234567890
+```
+
+The legacy posts CSV uses the original Chinese column names. The topic crawler below produces a different schema.
 
 ## Repository structure
 
 ```
-├── app.py                      # Streamlit demo: single-sentence abuse detection
+├── app.py                      # Streamlit: account scoring and text detection
 ├── requirements.txt
 ├── .env.example                # copy to .env, fill in your own cookie
 ├── data/README.md              # where to get the training corpora
@@ -71,6 +78,7 @@ The crawlers and `features.py` were refactored for publication and have been tes
     ├── preprocess.py           # shared text cleaning (training = inference)
     ├── utils.py                # ID hashing for anonymization
     ├── features.py             # builds the user feature matrix
+    ├── water_army.py           # XGBoost
     ├── crawler/
     │   ├── weibo_crawler.py
     │   └── user_profile_crawler.py
@@ -91,15 +99,15 @@ cp .env.example .env            # set WEIBO_COOKIE (your own account) and ANON_S
 
 ```bash
 python src/crawler/weibo_crawler.py --keyword "<topic>" \
-    --start "2024-05-03 19:00" --end "2024-05-03 20:00" --max-pages 20 --out data/raw/posts.csv
-python src/crawler/user_profile_crawler.py --in data/raw/posts.csv --out data/raw/profiles.csv
+    --start "2024-05-03 19:00" --end "2024-05-03 20:00" --max-pages 20 --out data/raw/topic_posts.csv
+python src/crawler/user_profile_crawler.py --in data/raw/topic_posts.csv --out data/raw/profiles.csv
 ```
 
 **2. Score posts with the abuse detector**
 
 ```bash
-python src/abuse_detector/predict_csv.py --model <path-or-hub-id> \
-    --in data/raw/posts.csv --out data/raw/posts_scored.csv
+python src/abuse_detector/predict_csv.py --model "models/cyberbullying_roberta" \
+    --in data/raw/topic_posts.csv --out data/raw/posts_scored.csv
 ```
 
 **3. Build the feature matrix**
@@ -112,7 +120,7 @@ python src/features.py --posts data/raw/posts_scored.csv \
 **4. (Optional) Run the demo**
 
 ```bash
-ABUSE_MODEL=<path-or-hub-id> streamlit run app.py
+python -m streamlit run app.py
 ```
 
 Note: the interaction network is built from @mentions, which carry only screen names. Step 3 therefore needs data crawled *without* `--anonymize`. Run it locally, and publish only anonymized, aggregated outputs.
@@ -122,13 +130,13 @@ Note: the interaction network is built from @mentions, which carry only screen n
 - **Base model:** `hfl/chinese-roberta-wwm-ext-large`, fine-tuned for binary classification (abusive / not abusive).
 - **Corpora:** a merge of three public datasets, ToxiCN [1], COLD [2] and SWSR [3]. They are not redistributed here; see `data/README.md`.
 - **Training setup:** AdamW, lr 5e-5, weight decay 0.01, 100 warmup steps, 5 epochs, batch size 32, max length 128; 8:1:1 stratified train/val/test split. The best epoch by validation F1 is kept, and the test set is used once at the end.
-- **Metrics:** run `train.py`; it writes `training_log.json` and `test_metrics.json` next to the model. *(Fill in the final held-out test numbers here.)*
+- **Metrics:** run `train.py`; it writes `training_log.json` and `test_metrics.json` next to the model.
 
 ```bash
 python src/abuse_detector/train.py --data corpus.csv --out models/cyberbullying_roberta
 ```
 
-Model weights are hosted on the Hugging Face Hub *(add link)*, not in this repository.
+RoBERTa defaults to `models/cyberbullying_roberta`. Set `ABUSE_MODEL` in your local `.env` to use another checkpoint directory or a compatible Hub model.
 
 ## Data & ethics
 
@@ -143,7 +151,7 @@ Model weights are hosted on the Hugging Face Hub *(add link)*, not in this repos
 - One event on one platform; signatures and thresholds may not transfer.
 - The abuse detector inherits the biases and annotation choices of its three corpora, and can misread sarcasm, quotation and reclaimed slurs.
 - Repost/original ratio is estimated from a sample of each user's recent posts.
-- Role labels reflect behavioral similarity to the labeled examples, not ground-truth intent.
+- The available detector labels describe the detector output on this sample.
 
 ## References
 

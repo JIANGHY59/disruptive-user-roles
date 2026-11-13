@@ -7,3 +7,4 @@ torch
 transformers
 tqdm
 streamlit
+xgboost>=2
