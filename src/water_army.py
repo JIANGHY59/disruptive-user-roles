@@ -86,10 +86,9 @@ def account_labels(path: Path) -> pd.Series:
     return grouped.first().astype(int)
 
 
-def train(features: pd.DataFrame, labels_path: Path, model_path: Path) -> None:
-    labels = account_labels(labels_path)
+def train(features: pd.DataFrame, labels: pd.Series, model_path: Path) -> None:
     dataset = features.join(labels, how="inner")
-    y = dataset.pop("bot")
+    y = dataset.pop(labels.name)
     counts = y.value_counts()
     if len(counts) != 2 or counts.min() < 5:
         raise ValueError("匹配后的训练样本每类至少需要 5 个账号")
@@ -109,7 +108,7 @@ def train(features: pd.DataFrame, labels_path: Path, model_path: Path) -> None:
     scores = model.predict_proba(x_test)[:, 1]
     predictions = scores >= 0.5
     metrics = {
-        "reference": "input bot labels",
+        "reference": f"input {labels.name} labels",
         "train_accounts": len(x_train),
         "test_accounts": len(x_test),
         "post_accounts_without_matching_label": len(features) - len(dataset),
@@ -165,7 +164,7 @@ def main() -> None:
     try:
         features = account_features(args.posts)
         if args.command == "train":
-            train(features, args.labels, args.model)
+            train(features, account_labels(args.labels), args.model)
         else:
             predict(features, args.model, args.out, args.threshold)
     except (OSError, ValueError) as exc:
