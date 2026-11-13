@@ -90,7 +90,7 @@ python src/abuse_detector/predict_csv.py --model models/cyberbullying_roberta --
 python src/features.py --posts data/raw/posts_scored.csv --profiles data/raw/profiles.csv --out data/features.csv
 ```
 
-学習スクリプトは `training_log.json` と `test_metrics.json` を出力します。トピック投稿とプロフィールの収集手順、および参考文献は [英語版 README](README.md) を参照してください。
+学習スクリプトは `training_log.json` と `test_metrics.json` を出力します。トピック投稿とプロフィールの収集手順は [英語版 README](README.md) を参照してください。
 
 ### RoBERTa のファインチューニング結果と検出例
 
@@ -108,3 +108,11 @@ python src/features.py --posts data/raw/posts_scored.csv --profiles data/raw/pro
 ## データの取り扱い
 
 投稿の生データ、アカウント別ラベル、学習用コーパス、モデルの重みはリポジトリに含まれていません。Cookie はローカルの `.env` に保存してください。公開する場合は匿名化した集計結果を使い、モデルのスコアは人手で確認する対象の選定に用いてください。
+
+## 参考文献
+
+1. Nian, F., et al. A study on the propagation of online public opinion by internet water army. 2024.
+2. Swed, O., et al. Keeping it authentic: the social footprint of the trolls' network. 2023.
+3. Lu, J., Xu, B., Zhang, X., et al. Facilitating Fine-grained Detection of Chinese Toxic Language: Hierarchical Taxonomy, Resources, and Benchmarks. *Proceedings of the 61st Annual Meeting of the ACL*, Toronto, Canada, 2023, vol. 1, pp. 16235–16250.
+4. Deng, J., Zhou, J., Sun, H., et al. COLD: A Benchmark for Chinese Offensive Language Detection. *Proceedings of EMNLP 2022*, Abu Dhabi, UAE, pp. 11580–11599.
+5. Jiang, A., Yang, X., Liu, Y., et al. SWSR: A Chinese Dataset and Lexicon for Online Sexism Detection. *Online Social Networks and Media*, 2022, 27:100182.

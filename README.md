@@ -150,7 +150,7 @@ Note: the interaction network is built from @mentions, which carry only screen n
 ## Abuse detector
 
 - **Base model:** `hfl/chinese-roberta-wwm-ext-large`, fine-tuned for binary classification (abusive / not abusive).
-- **Corpora:** a merge of three public datasets, ToxiCN [1], COLD [2] and SWSR [3]. They are not redistributed here; see `data/README.md`.
+- **Corpora:** a merge of three public datasets, ToxiCN [3], COLD [4] and SWSR [5]. They are not redistributed here; see `data/README.md`.
 - **Training setup:** AdamW, lr 5e-5, weight decay 0.01, 100 warmup steps, 5 epochs, batch size 32, max length 128; 8:1:1 stratified train/val/test split. The best epoch by validation F1 is kept, and the test set is used once at the end.
 - **Metrics:** run `train.py`; it writes `training_log.json` and `test_metrics.json` next to the model.
 
@@ -190,8 +190,8 @@ RoBERTa defaults to `models/cyberbullying_roberta`. Set `ABUSE_MODEL` in your lo
 
 ## References
 
-1. Lu, J., Xu, B., Zhang, X., et al. Facilitating Fine-grained Detection of Chinese Toxic Language: Hierarchical Taxonomy, Resources, and Benchmarks. *Proceedings of the 61st Annual Meeting of the ACL*, Toronto, Canada, 2023, vol. 1, pp. 16235–16250.
-2. Deng, J., Zhou, J., Sun, H., et al. COLD: A Benchmark for Chinese Offensive Language Detection. *Proceedings of EMNLP 2022*, Abu Dhabi, UAE, pp. 11580–11599.
-3. Jiang, A., Yang, X., Liu, Y., et al. SWSR: A Chinese Dataset and Lexicon for Online Sexism Detection. *Online Social Networks and Media*, 2022, 27:100182.
-4. Nian, F., et al. A study on the propagation of online public opinion by internet water army. 2024.
-5. Swed, O., et al. Keeping it authentic: the social footprint of the trolls' network. 2023.
+1. Nian, F., et al. A study on the propagation of online public opinion by internet water army. 2024.
+2. Swed, O., et al. Keeping it authentic: the social footprint of the trolls' network. 2023.
+3. Lu, J., Xu, B., Zhang, X., et al. Facilitating Fine-grained Detection of Chinese Toxic Language: Hierarchical Taxonomy, Resources, and Benchmarks. *Proceedings of the 61st Annual Meeting of the ACL*, Toronto, Canada, 2023, vol. 1, pp. 16235–16250.
+4. Deng, J., Zhou, J., Sun, H., et al. COLD: A Benchmark for Chinese Offensive Language Detection. *Proceedings of EMNLP 2022*, Abu Dhabi, UAE, pp. 11580–11599.
+5. Jiang, A., Yang, X., Liu, Y., et al. SWSR: A Chinese Dataset and Lexicon for Online Sexism Detection. *Online Social Networks and Media*, 2022, 27:100182.
